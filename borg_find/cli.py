@@ -199,29 +199,36 @@ def run():
                 if args.exec:
                     # Exec mode
                     for file in matching_files:
-                        user_process = (
-                            subprocess.run(  # pylint: disable=subprocess-run-check
-                                args.exec,
-                                shell=True,
-                                input=file.read(),
-                                capture_output=True,
+                        if file.is_dir():
+                            print(
+                                f"[{Fore.CYAN}SKIP{Fore.RESET}]",
+                                label(file),
+                                "is a directory",
                             )
-                        )
-                        status = (
-                            f"{Fore.GREEN}OK{Fore.RESET}"
-                            if user_process.returncode == 0
-                            else f"{Fore.RED}ERROR{Fore.RESET}"
-                        )
-                        print(
-                            f"[{status}]",
-                            label(user_process),
-                            "on",
-                            label(file),
-                            "returned",
-                            user_process.returncode,
-                        )
-                        if args.verbose:
-                            dumpproc(user_process.stdout, user_process.stderr)
+                        else:
+                            user_process = (
+                                subprocess.run(  # pylint: disable=subprocess-run-check
+                                    args.exec,
+                                    shell=True,
+                                    input=file.read(),
+                                    capture_output=True,
+                                )
+                            )
+                            status = (
+                                f"{Fore.GREEN}OK{Fore.RESET}"
+                                if user_process.returncode == 0
+                                else f"{Fore.RED}ERROR{Fore.RESET}"
+                            )
+                            print(
+                                f"[{status}]",
+                                label(user_process),
+                                "on",
+                                label(file),
+                                "returned",
+                                user_process.returncode,
+                            )
+                            if args.verbose:
+                                dumpproc(user_process.stdout, user_process.stderr)
                 elif args.output:
                     # Extract
                     count = 1
