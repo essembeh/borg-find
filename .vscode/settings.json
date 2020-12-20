@@ -1,0 +1,13 @@
+{
+    "files.exclude": {
+        ".venv/": true,
+        "**/__pycache__/": true,
+    },
+    "python.pythonPath": ".venv/bin/python",
+    // use this interpreter if you installed vscodium from flatpak
+    // "python.pythonPath": "extra/flatpak-python.sh",
+    "python.formatting.provider": "black",
+    "editor.formatOnSave": true,
+    "python.linting.pylintEnabled": true,
+    "python.linting.pylintUseMinimalCheckers": false,
+}

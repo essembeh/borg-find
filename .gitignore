@@ -1,0 +1,13 @@
+# Python
+__pycache__
+*.pyc
+
+# Generated
+/poetry.lock
+/.coverage
+/dist/
+
+# IDE
+/.vscode/*
+!/.vscode/settings.json
+
