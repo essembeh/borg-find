@@ -4,14 +4,14 @@ entry point
 import re
 import subprocess
 import sys
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
 from datetime import datetime
 from os import getenv
 from pathlib import Path
 from traceback import print_stack
-from typing import List
 
+from cached_property import cached_property
 from colorama import Fore, Style
 
 from . import __version__
@@ -22,36 +22,58 @@ from .utils import sizeof_fmt
 
 @dataclass
 class ArchiveFilter:
-    before: datetime
-    after: datetime
-    prefix: str
+    args: Namespace
 
     def __call__(self, archive: BorgArchive):
-        if self.after and self.after > archive.date:
+        if self.args.after and self.args.after > archive.date:
             return False
-        if self.before and self.before < archive.date:
+        if self.args.before and self.args.before < archive.date:
             return False
-        if self.prefix and not archive.name.startswith(self.prefix):
+        if self.args.prefix and not archive.name.startswith(self.args.prefix):
             return False
         return True
 
 
 @dataclass
 class FileFilter:
-    names: List[str]
-    patterns: List
+    args: Namespace
+    archive: BorgArchive
+
+    @cached_property
+    def previous_archive(self):
+        return find_previous_archive(self.archive)
 
     def __call__(self, file: BorgFile):
-        if self.names is None and self.patterns is None:
-            return True
-        if self.names:
-            for name in self.names:
+        out = False
+        if self.args.names is None and self.args.patterns is None:
+            out = True
+        if not out and self.args.names:
+            for name in self.args.names:
                 if name.lower() in file.path.lower():
-                    return True
-        if self.patterns:
-            for pattern in self.patterns:
+                    out = True
+        if not out and self.args.patterns:
+            for pattern in self.args.patterns:
                 if pattern.search(file.path):
-                    return True
+                    out = True
+        if (
+            out
+            and (self.args.new or self.args.modified)
+            and self.previous_archive is not None
+        ):
+            # also check is file is noew or modified
+            out = False
+            previous_file = self.previous_archive.find(file.path)
+            if self.args.new and previous_file is None:
+                out = True
+
+            if (
+                not out
+                and self.args.modified
+                and previous_file is not None
+                and file != previous_file
+            ):
+                out = True
+        return out
 
 
 def find_previous_archive(archive: BorgArchive) -> BorgArchive:
@@ -96,18 +118,21 @@ def run():
         help="only consider archive names starting with this prefix.",
     )
     agroup.add_argument(
+        "-R",
         "--reverse",
         action="store_true",
         help="reverse the archives order, default is oldest first",
     )
     agroup1 = agroup.add_mutually_exclusive_group()
     agroup1.add_argument(
+        "-F",
         "--first",
         metavar="N",
         type=int,
         help="consider first N archives after other filters were applied",
     )
     agroup1.add_argument(
+        "-L",
         "--last",
         metavar="N",
         type=int,
@@ -116,6 +141,7 @@ def run():
 
     fgroup = parser.add_argument_group("file selection")
     fgroup.add_argument(
+        "-n",
         "--name",
         metavar="MOTIF",
         dest="names",
@@ -123,6 +149,7 @@ def run():
         help="select files with path containing MOTIF (ignore case)",
     )
     fgroup.add_argument(
+        "-r",
         "--regex",
         metavar="PATTERN",
         dest="patterns",
@@ -131,10 +158,14 @@ def run():
         help="select files with path matching PATTERN",
     )
     fgroup.add_argument(
-        "-n",
         "--new",
         action="store_true",
         help="select only *new* files, which were not present in previous archive",
+    )
+    fgroup.add_argument(
+        "--modified",
+        action="store_true",
+        help="select only modified files, which were different in previous archive",
     )
 
     xgroup = parser.add_mutually_exclusive_group()
@@ -164,9 +195,7 @@ def run():
     args = parser.parse_args()
     try:
         repo = BorgRepository(args.repository)
-        archives = list(
-            filter(ArchiveFilter(args.before, args.after, args.prefix), repo.archives)
-        )
+        archives = list(filter(ArchiveFilter(args), repo.archives))
         if args.reverse:
             archives = reversed(archives)
         if args.last:
@@ -176,19 +205,7 @@ def run():
 
         # process archives
         for archive in archives:
-            matching_files = sorted(
-                filter(FileFilter(args.names, args.patterns), archive.files)
-            )
-            # keep only files not present in the previous archive
-            if args.new:
-                previous_archive = find_previous_archive(archive)
-                if previous_archive:
-                    matching_files = [
-                        f
-                        for f in matching_files
-                        if previous_archive.find(f.path) is None
-                    ]
-
+            matching_files = sorted(filter(FileFilter(args, archive), archive.files))
             if len(matching_files) == 0:
                 print(f"Skip {label(archive)}, no matching file")
             else:
@@ -260,10 +277,11 @@ def run():
                         elif args.sha1:
                             suffix = f"(sha1:{Fore.YELLOW}{file.sha1sum}{Fore.RESET})"
                         if args.verbose:
+                            user_group = f"{file.user}:{file.group}"
                             print(
                                 " ",
                                 file.mode,
-                                f"{file.user}:{file.group}",
+                                f"{user_group:<12}",
                                 f"{sizeof_fmt(file.size):>6}",
                                 file.date.isoformat(sep=" ", timespec="seconds"),
                                 label(file),

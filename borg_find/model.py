@@ -166,7 +166,11 @@ class BorgFile:
     def __eq__(self, other):
         if not isinstance(other, BorgFile):
             return NotImplemented
-        return self.path == other.path and self.size == other.size
+        return (
+            self.path == other.path
+            and self.size == other.size
+            and self.date == other.date
+        )
 
     def read(self):
         return borg_extract_file(self.archive.borg_name, self.path)

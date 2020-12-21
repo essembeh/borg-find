@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "borg_find"
-version = "0.1.0"
+version = "0.1.1"
 description = "Tool to search files in borg archives"
 authors = ["Sébastien MB <seb@essembeh.org>"]
 license = "Apache-2.0"

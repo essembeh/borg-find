@@ -45,8 +45,8 @@ $ poetry run borg-find --help
 
 ```
 usage: borg-find [-h] [--version] [-v] [-A YYYY-MM-DD] [-B YYYY-MM-DD]
-                 [-P PREFIX] [--reverse] [--first N | --last N] [--name MOTIF]
-                 [--regex PATTERN] [-n] [-x EXEC | --md5 | --sha1 | -o FOLDER]
+                 [-P PREFIX] [-R] [-F N | -L N] [-n MOTIF] [-r PATTERN]
+                 [--new] [--modified] [-x EXEC | --md5 | --sha1 | -o FOLDER]
                  [repository]
 
 positional arguments:
@@ -69,16 +69,20 @@ archive selection:
                         only consider archive created before given date
   -P PREFIX, --prefix PREFIX
                         only consider archive names starting with this prefix.
-  --reverse             reverse the archives order, default is oldest first
-  --first N             consider first N archives after other filters were
+  -R, --reverse         reverse the archives order, default is oldest first
+  -F N, --first N       consider first N archives after other filters were
                         applied
-  --last N              consider last N archives after other filters were
+  -L N, --last N        consider last N archives after other filters were
                         applied
 
 file selection:
-  --name MOTIF          select files with path containing MOTIF (ignore case)
-  --regex PATTERN       select files with path matching PATTERN
-  -n, --new             select only *new* files, which were not present in
+  -n MOTIF, --name MOTIF
+                        select files with path containing MOTIF (ignore case)
+  -r PATTERN, --regex PATTERN
+                        select files with path matching PATTERN
+  --new                 select only *new* files, which were not present in
+                        previous archive
+  --modified            select only modified files, which were different in
                         previous archive
 ```
 
@@ -88,12 +92,18 @@ You can filter *files* in *archives* using:
 * `--name MOTIF`: to select only files having `MOTIF` in their path (case not sensitive)
 * `--regex PATTERN`: to select only files having their path matching the `PATTERN`
 * `--new`: to only select file that were added in the archive, that were not present in the previous archive
+* `--modified`: to only select file that were modified in the archive, that were present in the previous archive, but date or/and size changed
 
-
-To find *archives* containing given files. 
+Examples:
 ```sh
 # search files with .txt extension in all archives
 $ borg-find --name '.txt' repo.borg
+
+# search files with .txt extension that were modified in each archive
+$ borg-find --name '.txt' --modified repo.borg
+
+# search all new files with .txt extension in each archive
+$ borg-find --name '.txt' --new repo.borg
 ```
 
 ## Find files in selected archives
@@ -107,6 +117,7 @@ You can also filter in which *archives* you will search for *files* using:
 
 > Note: **dates** can be date format `2020-02-24` or datetime format `2020-02-24T09:00:00`
 
+Examples:
 ```sh
 # search all log files in archives since february
 $ borg-find --after '2020-02-01' --name '.log' repo.borg
@@ -118,6 +129,8 @@ $ borg-find --before '2020-03-31' --last 10 --name '.log' repo.borg
 ## Execute a command every on matching files
 
 You can use `--exec` argument to execute a *shell* command (so you can pip commands like `--exec 'json_pp | grep "data" | wc -l'`)
+
+Examples:
 ```sh
 # to check since when logs contain a specific error message
 $ borg-find \
