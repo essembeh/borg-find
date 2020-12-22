@@ -20,17 +20,15 @@ LATEST = object()
 class BorgRepository:
     source: str
 
-    @cached_property
     def borg_info(self) -> Dict:
         return borg_repo_info(self.source)
 
-    @cached_property
     def borg_list(self) -> Dict:
         return borg_repo_list(self.source)
 
     @cached_property
     def archives(self) -> Tuple:
-        return tuple(sorted(BorgArchive(self, a) for a in self.borg_list["archives"]))
+        return tuple(sorted(BorgArchive(self, a) for a in self.borg_list()["archives"]))
 
     @cached_property
     def archives_map(self) -> Dict:
@@ -61,7 +59,6 @@ class BorgArchive:
     repo: BorgRepository
     description: dict
 
-    @cached_property
     def borg_list(self):
         return borg_archive_list(self.borg_name)
 
@@ -79,7 +76,7 @@ class BorgArchive:
 
     @cached_property
     def files(self):
-        return tuple(BorgFile(self, f) for f in self.borg_list)
+        return tuple(BorgFile(self, f) for f in self.borg_list())
 
     @cached_property
     def borg_name(self):

@@ -1,6 +1,8 @@
 """
 entry point
 """
+import concurrent
+import os
 import re
 import subprocess
 import sys
@@ -17,7 +19,7 @@ from colorama import Fore, Style
 from . import __version__
 from .model import BorgArchive, BorgFile, BorgRepository
 from .ui import dumpproc, label
-from .utils import sizeof_fmt
+from .utils import print_temp_message, sizeof_fmt
 
 
 @dataclass
@@ -96,6 +98,13 @@ def run():
         "--verbose",
         action="store_true",
         help="print more details",
+    )
+    parser.add_argument(
+        "-j",
+        "--jobs",
+        type=int,
+        default=os.cpu_count() or 1,
+        help="number of parallel threads to read archives",
     )
     agroup = parser.add_argument_group("archive selection")
     agroup.add_argument(
@@ -202,6 +211,29 @@ def run():
             archives = archives[args.last * -1 :]
         elif args.first:
             archives = archives[0 : args.first]
+
+        if args.jobs > 0:
+            print_temp_message(
+                f"Reading {len(archives)} archive(s) from {label(repo)} with {args.jobs} thread(s) ..."
+            )
+            # preload archives
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=args.jobs
+            ) as executor:
+
+                def load(a: BorgArchive):
+                    a.files
+                    return a
+
+                count = 1
+                for job in concurrent.futures.as_completed(
+                    [executor.submit(load, a) for a in archives]
+                ):
+                    archive = job.result()
+                    print_temp_message(
+                        f"[{count}/{len(archives)}] Reading archive {label(archive)} ..."
+                    )
+                    count += 1
 
         # process archives
         for archive in archives:
