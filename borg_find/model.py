@@ -5,6 +5,7 @@ import hashlib
 from dataclasses import dataclass
 from datetime import datetime
 from functools import total_ordering
+from os import utime
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -172,8 +173,13 @@ class BorgFile:
     def read(self):
         return borg_extract_file(self.archive.borg_name, self.path)
 
-    def extract(self, output: Path, mkdir_parents: bool = True):
+    def extract(
+        self, output: Path, mkdir_parents: bool = True, update_times: bool = True
+    ):
         if mkdir_parents:
             output.parent.mkdir(parents=True, exist_ok=True)
         with output.open("wb") as fp:
             fp.write(self.read())
+        if update_times:
+            mtime_secs = self.date.timestamp()
+            utime(output, (mtime_secs, mtime_secs))
