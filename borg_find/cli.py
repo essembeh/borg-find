@@ -1,93 +1,27 @@
 """
 entry point
 """
-import concurrent
 import os
 import re
 import subprocess
 import sys
-from argparse import ArgumentParser, Namespace
-from dataclasses import dataclass
+from argparse import ArgumentParser
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from os import getenv
 from pathlib import Path
-from traceback import print_stack
 
-from cached_property import cached_property
 from colorama import Fore, Style
 
+from borg_find.borg import Borg
+
 from . import __version__
-from .model import BorgArchive, BorgFile, BorgRepository
+from .filters import ArchiveFilter, FileFilter
+from .model import BorgRepository
 from .ui import dumpproc, label
 from .utils import print_temp_message, sizeof_fmt
 
-
-@dataclass
-class ArchiveFilter:
-    args: Namespace
-
-    def __call__(self, archive: BorgArchive):
-        if self.args.after and self.args.after > archive.date:
-            return False
-        if self.args.before and self.args.before < archive.date:
-            return False
-        if self.args.prefix and not archive.name.startswith(self.args.prefix):
-            return False
-        return True
-
-
-@dataclass
-class FileFilter:
-    args: Namespace
-    archive: BorgArchive
-
-    @cached_property
-    def previous_archive(self):
-        return find_previous_archive(self.archive)
-
-    def __call__(self, file: BorgFile):
-        out = False
-        if self.args.names is None and self.args.patterns is None:
-            out = True
-        if not out and self.args.names:
-            for name in self.args.names:
-                if name.lower() in file.path.lower():
-                    out = True
-        if not out and self.args.patterns:
-            for pattern in self.args.patterns:
-                if pattern.search(file.path):
-                    out = True
-        if (
-            out
-            and (self.args.new or self.args.modified)
-            and self.previous_archive is not None
-        ):
-            # also check is file is noew or modified
-            out = False
-            previous_file = self.previous_archive.find(file.path)
-            if self.args.new and previous_file is None:
-                out = True
-
-            if (
-                not out
-                and self.args.modified
-                and previous_file is not None
-                and file != previous_file
-            ):
-                out = True
-        return out
-
-
-def find_previous_archive(archive: BorgArchive) -> BorgArchive:
-    """
-    retrieve previous archive
-    """
-    out = None
-    for a in archive.repo.archives:
-        if a.uid != archive.uid and a.date < archive.date:
-            if out is None or a.date > out.date:
-                out = a
-    return out
+DEFAULT_CACHE_FOLDER = Path.home() / ".cache" / "borg-find"
 
 
 def run():
@@ -105,6 +39,11 @@ def run():
         type=int,
         default=os.cpu_count() or 1,
         help="number of parallel threads to read archives",
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help=f"disable caching archive content (default folder: {DEFAULT_CACHE_FOLDER})",
     )
     agroup = parser.add_argument_group("archive selection")
     agroup.add_argument(
@@ -190,23 +129,24 @@ def run():
         type=Path,
         help="extract matching files to this folder",
     )
-    kwargs = {}
-    if getenv("BORG_REPO"):
-        kwargs["nargs"] = "?"
     parser.add_argument(
         "repository",
         default=getenv("BORG_REPO"),
         help="borg repository, mandatory is BORG_REPO is not set",
-        **kwargs,
+        **({"nargs": "?"} if getenv("BORG_REPO") else {}),
     )
 
     # Parse command line
     args = parser.parse_args()
     try:
-        repo = BorgRepository(args.repository)
+        borg = Borg(
+            getenv("BORG_BIN", "borg"),
+            cache_folder=DEFAULT_CACHE_FOLDER,
+        )
+        repo = BorgRepository(borg, args.repository)
         archives = list(filter(ArchiveFilter(args), repo.archives))
         if args.reverse:
-            archives = reversed(archives)
+            archives = list(reversed(archives))
         if args.last:
             archives = archives[args.last * -1 :]
         elif args.first:
@@ -217,23 +157,13 @@ def run():
                 f"Reading {len(archives)} archive(s) from {label(repo)} with {args.jobs} thread(s) ..."
             )
             # preload archives
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=args.jobs
-            ) as executor:
-
-                def load(a: BorgArchive):
-                    a.files
-                    return a
-
-                count = 1
-                for job in concurrent.futures.as_completed(
-                    [executor.submit(load, a) for a in archives]
-                ):
-                    archive = job.result()
+            with ThreadPoolExecutor(max_workers=args.jobs) as executor:
+                jobs = {executor.submit(lambda a: a.files, a): a for a in archives}
+                for index, job in enumerate(as_completed(jobs.keys())):
+                    archive = jobs[job]
                     print_temp_message(
-                        f"[{count}/{len(archives)}] Reading archive {label(archive)} ..."
+                        f"[{index+1}/{len(jobs)}] Reading archive {label(archive)} ..."
                     )
-                    count += 1
 
         # process archives
         for archive in archives:
@@ -255,13 +185,11 @@ def run():
                                 "is a directory",
                             )
                         else:
-                            user_process = (
-                                subprocess.run(  # pylint: disable=subprocess-run-check
-                                    args.exec,
-                                    shell=True,
-                                    input=file.read(),
-                                    capture_output=True,
-                                )
+                            user_process = subprocess.run(
+                                args.exec,
+                                shell=True,
+                                input=file.read(),
+                                capture_output=True,
                             )
                             status = (
                                 f"{Fore.GREEN}OK{Fore.RESET}"
@@ -331,9 +259,8 @@ def run():
 
     except KeyboardInterrupt:
         pass
-    except BaseException as exception:  # pylint: disable=broad-except
-        print(f"{Fore.RED}{exception.__class__.__name__}: {exception}")
+    except BaseException as e:
+        print(f"{Fore.RED}{e.__class__.__name__}: {e}{Style.RESET_ALL}")
         if getenv("DEBUG"):
-            print_stack(exception)
-        print(Style.RESET_ALL, end="")
+            raise e
         sys.exit(1)

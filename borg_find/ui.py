@@ -1,10 +1,12 @@
 """
 some utils for fancy stdout
 """
-from pathlib import Path
 import shlex
+from pathlib import Path
 from subprocess import CompletedProcess
-from colorama import Style, Fore
+
+from colorama import Fore, Style
+
 from .model import BorgArchive, BorgFile, BorgRepository
 
 

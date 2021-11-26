@@ -2,12 +2,13 @@
 some useful functions
 """
 import hashlib
+from typing import Callable
 
 from colorama import Cursor
 from colorama.ansi import clear_line
 
 
-def sizeof_fmt(num: float, suffix=""):
+def sizeof_fmt(num: float, suffix: str = ""):
     """
     simply display a human readable size
     """
@@ -27,7 +28,7 @@ def print_temp_message(msg: str):
     print(clear_line(), msg, Cursor.BACK(len(msg)), sep="", end="", flush=True)
 
 
-def compute_fingerprint(content, func: callable = hashlib.md5):
+def compute_fingerprint(content, func: Callable = hashlib.md5):
     """
     compute fingerprint given the algo function (sha1, md5 ...)
     """

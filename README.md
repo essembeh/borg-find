@@ -44,10 +44,7 @@ $ poetry run borg-find --help
 # Usage
 
 ```
-usage: borg-find [-h] [--version] [-v] [-A YYYY-MM-DD] [-B YYYY-MM-DD]
-                 [-P PREFIX] [-R] [-F N | -L N] [-n MOTIF] [-r PATTERN]
-                 [--new] [--modified] [-x EXEC | --md5 | --sha1 | -o FOLDER]
-                 [repository]
+usage: borg-find [-h] [--version] [-v] [-j JOBS] [--no-cache] [-A YYYY-MM-DD] [-B YYYY-MM-DD] [-P PREFIX] [-R] [-F N | -L N] [-n MOTIF] [-r PATTERN] [--new] [--modified] [-x EXEC | --md5 | --sha1 | -o FOLDER] repository
 
 positional arguments:
   repository            borg repository, mandatory is BORG_REPO is not set
@@ -56,6 +53,8 @@ optional arguments:
   -h, --help            show this help message and exit
   --version             show program's version number and exit
   -v, --verbose         print more details
+  -j JOBS, --jobs JOBS  number of parallel threads to read archives
+  --no-cache            disable caching archive content (default folder: /home/seb/.cache/borg-find)
   -x EXEC, --exec EXEC  execute the command on every matching file
   --md5                 also print file md5sum
   --sha1                also print file sha1sum
@@ -70,20 +69,16 @@ archive selection:
   -P PREFIX, --prefix PREFIX
                         only consider archive names starting with this prefix.
   -R, --reverse         reverse the archives order, default is oldest first
-  -F N, --first N       consider first N archives after other filters were
-                        applied
-  -L N, --last N        consider last N archives after other filters were
-                        applied
+  -F N, --first N       consider first N archives after other filters were applied
+  -L N, --last N        consider last N archives after other filters were applied
 
 file selection:
   -n MOTIF, --name MOTIF
                         select files with path containing MOTIF (ignore case)
   -r PATTERN, --regex PATTERN
                         select files with path matching PATTERN
-  --new                 select only *new* files, which were not present in
-                        previous archive
-  --modified            select only modified files, which were different in
-                        previous archive
+  --new                 select only *new* files, which were not present in previous archive
+  --modified            select only modified files, which were different in previous archive
 ```
 
 ## Find files in all archives
