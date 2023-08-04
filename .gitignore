@@ -3,7 +3,6 @@ __pycache__
 *.pyc
 
 # Generated
-/poetry.lock
 /.coverage
 /dist/
 
